@@ -38,6 +38,6 @@ def get_architecture(arch: str, dataset: str) -> torch.nn.Module:
         model = resnet_mnist(depth=20)
     elif arch == "lenet":
         model = LeNet(num_classes=10)
-    normalize_layer = get_normalize_layer(dataset)
+    # normalize_layer = get_normalize_layer(dataset)
     # return torch.nn.Sequential(normalize_layer, model).to(device)
     return torch.nn.Sequential(model).to(device)

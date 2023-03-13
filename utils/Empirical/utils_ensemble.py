@@ -236,10 +236,11 @@ def test(args,loader, models, criterion, epoch, device, writer=None, print_freq=
 	end = time.time()
 
 	# switch to eval mode
-	for i in range(len(models)):
-		models[i].eval()
-
-	ensemble = Ensemble_soft_baseline(models,args.seed,args.b,args.mask)
+	# for i in range(len(models)):
+	# 	models[i].eval()
+	models.eval()
+	# ensemble = Ensemble_soft_baseline(models,args.seed,args.b,args.mask)
+	# ensemble = Ensemble(models)
 	with torch.no_grad():
 		for i, (inputs, targets) in enumerate(loader):
 			# measure data loading time
@@ -247,7 +248,8 @@ def test(args,loader, models, criterion, epoch, device, writer=None, print_freq=
 			inputs, targets = inputs.to(device), targets.to(device)
 
 			# compute output
-			outputs = ensemble(inputs)
+			# outputs = ensemble(inputs)
+			outputs = models(inputs)
 			loss = criterion(outputs, targets)
 
 			# measure accuracy and record loss
