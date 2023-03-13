@@ -171,7 +171,7 @@ def TRS_Trainer(args, loader: DataLoader, models, criterion, optimizer: Optimize
 	writer.add_scalar('train/cos02', cos02_losses.avg, epoch)
 	writer.add_scalar('train/cos12', cos12_losses.avg, epoch)
 
-def Naive_Trainer(args, loader: DataLoader, models, criterion, optimizer: Optimizer,epoch: int, device: torch.device, writer=None ):
+def Naive_Trainer(args,x0_list , y0_list , batch_num, models, criterion, optimizer: Optimizer,epoch: int, device: torch.device, writer=None ):
 	batch_time = AverageMeter()
 	data_time = AverageMeter()
 	losses = AverageMeter()
@@ -180,9 +180,9 @@ def Naive_Trainer(args, loader: DataLoader, models, criterion, optimizer: Optimi
 
 	end = time.time()
 
-	for i in range(args.num_models):
-		models[i].train()
-		requires_grad_(models[i], True)
+	# for i in range(args.num_models):
+	models.train()
+	requires_grad_(models, True)
 	## 定义modular的参数
 	
     # np.random.seed(self.opt.seed)
@@ -196,30 +196,25 @@ def Naive_Trainer(args, loader: DataLoader, models, criterion, optimizer: Optimi
 	# 	b.append(128)
 	# 	mask.append(1)
 	end = time.time()
-	for i, (inputs, targets) in enumerate(loader):
+	for i in range(batch_num):
 		# measure data loading time
 		# data_time.update(time.time() - end)
 
-		inputs, targets =inputs.to(device), targets.to(device)
+		inputs, targets =x0_list[i].to(device), y0_list[i].to(device)
 		batch_size = inputs.size(0)
 		inputs.requires_grad = True
 		grads = []
 		loss_std = 0
-		for j in range(args.num_models):
-			logits = models[j]( Modular(args.seed[j],args.b[j],args.mask[j])(inputs))
+		# for j in range(args.num_models):
+		logits = models(inputs)
 			# logits = models[j](inputs)
-			loss = criterion(logits, targets)
-			grad = autograd.grad(loss, inputs, create_graph=True)[0]
-			grad = grad.flatten(start_dim=1)
-			grads.append(grad)
-			loss_std += loss
+		loss = criterion(logits, targets)
+		grad = autograd.grad(loss, inputs, create_graph=True)[0]
+		grad = grad.flatten(start_dim=1)
+		grads.append(grad)
 
-
-		loss = loss_std
-
-
-		ensemble = Ensemble_soft_baseline(models,args.seed,args.b,args.mask)
-		logits = ensemble(inputs)
+		# ensemble = Ensemble_soft_baseline(models,args.seed,args.b,args.mask)
+		# logits = ensemble(inputs)
 
 		# measure accuracy and record loss
 		acc1, acc5 = accuracy(logits, targets, topk=(1, 5))
@@ -243,19 +238,86 @@ def Naive_Trainer(args, loader: DataLoader, models, criterion, optimizer: Optimi
 					'Loss {loss.avg:.4f}\t'
 					'Acc@1 {top1.avg:.3f}\t'
 					'Acc@5 {top5.avg:.3f}'.format(
-				epoch, i, len(loader), batch_time=batch_time,
+				epoch, i, batch_num, batch_time=batch_time,
 				data_time=data_time, loss=losses, top1=top1, top5=top5))
 
 	data_time.update(time.time() - end)
 	print('Epoch: [{0}][{1}/{2}]\t'
 					'Data {data_time.avg:.3f}\t'.format(
-				epoch, i, len(loader),
+				epoch, i, batch_num,
 				data_time=data_time))
 		
 	writer.add_scalar('train/batch_time', batch_time.avg, epoch)
 	writer.add_scalar('train/acc@1', top1.avg, epoch)
 	writer.add_scalar('train/acc@5', top5.avg, epoch)
 	writer.add_scalar('train/loss', losses.avg, epoch)
+
+def Model_Trainer(args, x_list,y_list , batch_num , models, criterion, optimizer: Optimizer,epoch: int, device: torch.device, writer=None ):
+	batch_time = AverageMeter()
+	data_time = AverageMeter()
+	losses = AverageMeter()
+	top1 = AverageMeter()
+	top5 = AverageMeter()
+
+	models.train()
+	requires_grad_(models,True)
+	end = time.time()
+	for i in range(batch_num):
+		# measure data loading time
+		# data_time.update(time.time() - end)
+		inputs , targets = x_list[i] , y_list[i]
+		inputs, targets =inputs.to(device), targets.to(device)
+		batch_size = inputs.size(0)
+		inputs.requires_grad = True
+		grads = []
+		loss_std = 0
+
+		logits = models( inputs )
+			# logits = models[j](inputs)
+		loss = criterion(logits, targets)
+		grad = autograd.grad(loss, inputs, create_graph=True)[0]
+		grad = grad.flatten(start_dim=1)
+		grads.append(grad)
+
+		# ensemble = Ensemble_soft_baseline(models,args.seed,args.b,args.mask)
+		# logits = ensemble(inputs)
+
+		# measure accuracy and record loss
+		acc1, acc5 = accuracy(logits, targets, topk=(1, 5))
+		losses.update(loss.item(), batch_size)
+		top1.update(acc1.item(), batch_size)
+		top5.update(acc5.item(), batch_size)
+
+		# 更新参数
+		optimizer.zero_grad()
+		loss.backward()
+		optimizer.step()
+
+		# measure elapsed time
+		batch_time.update(time.time() - end)
+		end = time.time()
+
+		if i % args.print_freq == 0:
+			print('Epoch: [{0}][{1}/{2}]\t'
+					'Time {batch_time.avg:.3f}\t'
+					'Data {data_time.avg:.3f}\t'
+					'Loss {loss.avg:.4f}\t'
+					'Acc@1 {top1.avg:.3f}\t'
+					'Acc@5 {top5.avg:.3f}'.format(
+				epoch, i, batch_num, batch_time=batch_time,
+				data_time=data_time, loss=losses, top1=top1, top5=top5))
+
+	data_time.update(time.time() - end)
+	print('Epoch: [{0}][{1}/{2}]\t'
+					'Data {data_time.avg:.3f}\t'.format(
+				epoch, i, batch_num,
+				data_time=data_time))
+		
+	writer.add_scalar('train/batch_time', batch_time.avg, epoch)
+	writer.add_scalar('train/acc@1', top1.avg, epoch)
+	writer.add_scalar('train/acc@5', top5.avg, epoch)
+	writer.add_scalar('train/loss', losses.avg, epoch)
+
 
 def GAL_Trainer(args, loader: DataLoader, models, criterion, optimizer: Optimizer,
 				epoch: int, device: torch.device, writer=None):
